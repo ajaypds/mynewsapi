@@ -106,7 +106,7 @@ class NewsService {
                     $gte: startDate,
                     $lt: endDate
                 }
-            }).sort({ publishedAt: -1 });
+            }).sort({ publishedAt: 1 }); // Sort oldest first (newest articles will be streamed last)
 
             return articles;
         } catch (error) {

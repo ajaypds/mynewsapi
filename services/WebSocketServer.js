@@ -60,9 +60,13 @@ class WebSocketServer {
                     message: `First 10 articles sent. ${articles.length - 10} more to follow.`
                 }));
 
-                // Stream remaining articles one by one every 2 minutes
+                // Stream remaining articles one by one at configurable interval
                 const remainingArticles = articles.slice(10);
-                let index = 0;
+                let index = 0;                // Get stream interval from environment variable (default to 120 seconds = 2 minutes)
+                const streamIntervalSeconds = parseInt(process.env.STREAM_INTERVAL_SECONDS) || 120;
+                const streamIntervalMs = streamIntervalSeconds * 1000;
+
+                console.log(`Streaming remaining ${remainingArticles.length} articles every ${streamIntervalSeconds} second(s)`);
 
                 const streamInterval = setInterval(() => {
                     if (index < remainingArticles.length && ws.readyState === WebSocket.OPEN) {
@@ -84,7 +88,7 @@ class WebSocketServer {
                             }));
                         }
                     }
-                }, 2 * 60 * 1000); // 2 minutes in milliseconds
+                }, streamIntervalMs); // Use configurable interval from environment
 
                 // Clear interval if client disconnects
                 ws.on('close', () => {

@@ -112,16 +112,21 @@ class Server {
                     const articleDiv = document.createElement('div');
                     articleDiv.className = 'article';
                     
+                    // Format date and time properly
+                    const publishedDate = new Date(article.publishedAt);
+                    const formattedDateTime = publishedDate.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS format
+                    
                     articleDiv.innerHTML = \`
                         <h3>\${article.title}</h3>
                         <p><strong>Source:</strong> \${article.source.name}</p>
                         <p><strong>Author:</strong> \${article.author || 'Unknown'}</p>
-                        <p><strong>Published:</strong> \${new Date(article.publishedAt).toLocaleString()}</p>
+                        <p><strong>Published:</strong> \${formattedDateTime}</p>
                         <p>\${article.description || ''}</p>
                         <p><a href="\${article.url}" target="_blank">Read full article</a></p>
                     \`;
                     
-                    articlesDiv.appendChild(articleDiv);
+                    // Insert at the top (like Android push notifications)
+                    articlesDiv.insertBefore(articleDiv, articlesDiv.firstChild);
                 }
 
                 function updateStats() {
