@@ -17,6 +17,7 @@ class NewsService {
     // Fetch news from NewsAPI
     async fetchNewsFromAPI(date) {
         try {
+            console.log(`Fetching news from API for date: ${date}`);
             const response = await axios.get(`${this.baseUrl}/everything`, {
                 params: {
                     q: 'India',
@@ -29,7 +30,11 @@ class NewsService {
             });
 
             if (response.data.status === 'ok') {
-                return response.data.articles;
+                const totalResults = response.data.totalResults;
+                const fetchedArticles = response.data.articles;
+
+                console.log(`Successfully fetched ${fetchedArticles.length} articles from API (Total available: ${totalResults})`);
+                return fetchedArticles;
             } else {
                 throw new Error(`API Error: ${response.data.message}`);
             }
@@ -43,8 +48,13 @@ class NewsService {
     async saveArticlesToDB(articles, fetchDate) {
         try {
             const savedArticles = [];
+            let duplicateCount = 0;
+            let errorCount = 0;
 
-            for (const article of articles) {
+            console.log(`Starting to save ${articles.length} articles to database...`);
+
+            for (let i = 0; i < articles.length; i++) {
+                const article = articles[i];
                 try {
                     const newsArticle = new NewsArticle({
                         source: article.source,
@@ -60,14 +70,23 @@ class NewsService {
 
                     const saved = await newsArticle.save();
                     savedArticles.push(saved);
+
+                    // Log progress every 50 articles
+                    if ((i + 1) % 50 === 0) {
+                        console.log(`Saved ${i + 1}/${articles.length} articles...`);
+                    }
                 } catch (error) {
                     // Skip duplicate articles (unique constraint on URL)
-                    if (error.code !== 11000) {
-                        console.error('Error saving article:', error.message);
+                    if (error.code === 11000) {
+                        duplicateCount++;
+                    } else {
+                        errorCount++;
+                        console.error(`Error saving article ${i + 1}:`, error.message);
                     }
                 }
             }
 
+            console.log(`Database save complete: ${savedArticles.length} saved, ${duplicateCount} duplicates skipped, ${errorCount} errors`);
             return savedArticles;
         } catch (error) {
             console.error('Error saving articles to database:', error.message);
