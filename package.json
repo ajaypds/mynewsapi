@@ -5,7 +5,11 @@
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
-        "dev": "nodemon server.js"
+        "dev": "nodemon server.js",
+        "build": "echo 'No build step required for this Node.js app'",
+        "test": "echo 'No tests specified'",
+        "lint": "echo 'No linting configured'",
+        "clean": "echo 'Cleaning temporary files...' && rm -rf node_modules/.cache"
     },
     "dependencies": {
         "axios": "^1.6.0",
