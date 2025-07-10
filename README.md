@@ -67,16 +67,17 @@ The WebSocket endpoint supports resuming from any article index using query para
 
 ```javascript
 // Connect from the beginning
-const ws = new WebSocket('ws://localhost:3000');
+const ws = new WebSocket("ws://localhost:3000");
 
 // Resume from article index 10 (0-based, so this is the 11th article)
-const ws = new WebSocket('ws://localhost:3000?resumeFrom=10');
+const ws = new WebSocket("ws://localhost:3000?resumeFrom=10");
 
 // Resume from article index 25
-const ws = new WebSocket('ws://localhost:3000?resumeFrom=25');
+const ws = new WebSocket("ws://localhost:3000?resumeFrom=25");
 ```
 
 **Message Types:**
+
 - `info` - Information about resume operation
 - `batch` - Initial batch of articles (up to 10)
 - `stream` - Individual articles streamed at intervals
@@ -111,7 +112,7 @@ news-api/
 ### How It Works
 
 1. **News Fetching**: The app fetches news from NewsAPI.org for the previous day with query parameter `q=India`
-2. **Database Storage**: Articles are stored in MongoDB with duplicate URL prevention  
+2. **Database Storage**: Articles are stored in MongoDB with duplicate URL prevention
 3. **WebSocket Streaming**:
    - **Resume Support**: Connect with `?resumeFrom=N` to start from article index N
    - **Batching**: Send up to 10 articles immediately from the resume point
@@ -128,11 +129,12 @@ ws://localhost:3000
 # Resume from 11th article (index 10)
 ws://localhost:3000?resumeFrom=10
 
-# Resume from 26th article (index 25)  
+# Resume from 26th article (index 25)
 ws://localhost:3000?resumeFrom=25
 ```
 
 **Index Notes:**
+
 - Indexes are 0-based (0 = first article, 10 = eleventh article)
 - If resumeFrom exceeds available articles, an error is returned
 - Articles are ordered by publication date (oldest first)

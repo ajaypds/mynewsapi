@@ -16,7 +16,7 @@ class WebSocketServer {
             // Parse query parameters from URL
             const parsedUrl = url.parse(req.url, true);
             const resumeFromIndex = parseInt(parsedUrl.query.resumeFrom) || 0;
-            
+
             console.log(`Resume from index: ${resumeFromIndex}`);
 
             ws.on('message', (message) => {
@@ -83,7 +83,7 @@ class WebSocketServer {
                     total: articles.length,
                     startIndex: resumeFromIndex,
                     endIndex: resumeFromIndex + initialBatch.length - 1,
-                    message: resumeFromIndex > 0 
+                    message: resumeFromIndex > 0
                         ? `Resumed: ${initialBatch.length} articles sent (${resumeFromIndex + 1}-${resumeFromIndex + initialBatch.length})`
                         : 'All articles sent'
                 }));
@@ -95,7 +95,7 @@ class WebSocketServer {
                     total: articles.length,
                     startIndex: resumeFromIndex,
                     endIndex: resumeFromIndex + batchSize - 1,
-                    message: resumeFromIndex > 0 
+                    message: resumeFromIndex > 0
                         ? `Resumed: First ${batchSize} articles sent (${resumeFromIndex + 1}-${resumeFromIndex + batchSize}). ${remainingArticles.length - batchSize} more to follow.`
                         : `First ${batchSize} articles sent. ${remainingArticles.length - batchSize} more to follow.`
                 }));
@@ -103,7 +103,7 @@ class WebSocketServer {
                 // Stream remaining articles one by one at configurable interval
                 const articlesToStream = remainingArticles.slice(batchSize);
                 let streamIndex = 0;
-                
+
                 // Get stream interval from environment variable (default to 120 seconds = 2 minutes)
                 const streamIntervalSeconds = parseInt(process.env.STREAM_INTERVAL_SECONDS) || 120;
                 const streamIntervalMs = streamIntervalSeconds * 1000;
