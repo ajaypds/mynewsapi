@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const NewsService = require('./NewsService');
+const url = require('url');
 
 class WebSocketServer {
     constructor(server) {
@@ -9,8 +10,14 @@ class WebSocketServer {
     }
 
     setupWebSocket() {
-        this.wss.on('connection', (ws) => {
+        this.wss.on('connection', (ws, req) => {
             console.log('Client connected');
+
+            // Parse query parameters from URL
+            const parsedUrl = url.parse(req.url, true);
+            const resumeFromIndex = parseInt(parsedUrl.query.resumeFrom) || 0;
+            
+            console.log(`Resume from index: ${resumeFromIndex}`);
 
             ws.on('message', (message) => {
                 console.log('Received message:', message.toString());
@@ -24,12 +31,12 @@ class WebSocketServer {
                 console.error('WebSocket error:', error);
             });
 
-            // Start streaming news to the connected client
-            this.streamNews(ws);
+            // Start streaming news to the connected client with resume index
+            this.streamNews(ws, resumeFromIndex);
         });
     }
 
-    async streamNews(ws) {
+    async streamNews(ws, resumeFromIndex = 0) {
         try {
             const articles = await this.newsService.getNews();
 
@@ -41,50 +48,87 @@ class WebSocketServer {
                 return;
             }
 
+            // Validate resume index
+            if (resumeFromIndex >= articles.length) {
+                ws.send(JSON.stringify({
+                    type: 'error',
+                    message: `Resume index ${resumeFromIndex} is beyond available articles (${articles.length})`
+                }));
+                return;
+            }
+
+            // If resuming, send info about what we're resuming from
+            if (resumeFromIndex > 0) {
+                ws.send(JSON.stringify({
+                    type: 'info',
+                    message: `Resuming from article ${resumeFromIndex + 1} of ${articles.length}`,
+                    resumeIndex: resumeFromIndex,
+                    total: articles.length
+                }));
+            }
+
+            // Get articles from the resume point onwards
+            const remainingArticles = articles.slice(resumeFromIndex);
+
+            // Determine how many to send in initial batch
+            const batchSize = Math.min(10, remainingArticles.length);
+            const initialBatch = remainingArticles.slice(0, batchSize);
+
             // Send initial batch
-            if (articles.length <= 10) {
-                // Send all articles at once
+            if (remainingArticles.length <= 10) {
+                // Send all remaining articles at once
                 ws.send(JSON.stringify({
                     type: 'batch',
-                    articles: articles,
+                    articles: initialBatch,
                     total: articles.length,
-                    message: 'All articles sent'
+                    startIndex: resumeFromIndex,
+                    endIndex: resumeFromIndex + initialBatch.length - 1,
+                    message: resumeFromIndex > 0 
+                        ? `Resumed: ${initialBatch.length} articles sent (${resumeFromIndex + 1}-${resumeFromIndex + initialBatch.length})`
+                        : 'All articles sent'
                 }));
             } else {
-                // Send first 10 articles immediately
-                const firstBatch = articles.slice(0, 10);
+                // Send first batch immediately
                 ws.send(JSON.stringify({
                     type: 'batch',
-                    articles: firstBatch,
+                    articles: initialBatch,
                     total: articles.length,
-                    message: `First 10 articles sent. ${articles.length - 10} more to follow.`
+                    startIndex: resumeFromIndex,
+                    endIndex: resumeFromIndex + batchSize - 1,
+                    message: resumeFromIndex > 0 
+                        ? `Resumed: First ${batchSize} articles sent (${resumeFromIndex + 1}-${resumeFromIndex + batchSize}). ${remainingArticles.length - batchSize} more to follow.`
+                        : `First ${batchSize} articles sent. ${remainingArticles.length - batchSize} more to follow.`
                 }));
 
                 // Stream remaining articles one by one at configurable interval
-                const remainingArticles = articles.slice(10);
-                let index = 0;                // Get stream interval from environment variable (default to 120 seconds = 2 minutes)
+                const articlesToStream = remainingArticles.slice(batchSize);
+                let streamIndex = 0;
+                
+                // Get stream interval from environment variable (default to 120 seconds = 2 minutes)
                 const streamIntervalSeconds = parseInt(process.env.STREAM_INTERVAL_SECONDS) || 120;
                 const streamIntervalMs = streamIntervalSeconds * 1000;
 
-                console.log(`Streaming remaining ${remainingArticles.length} articles every ${streamIntervalSeconds} second(s)`);
+                console.log(`Streaming remaining ${articlesToStream.length} articles every ${streamIntervalSeconds} second(s) starting from index ${resumeFromIndex + batchSize}`);
 
                 const streamInterval = setInterval(() => {
-                    if (index < remainingArticles.length && ws.readyState === WebSocket.OPEN) {
+                    if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
+                        const currentArticleIndex = resumeFromIndex + batchSize + streamIndex;
                         ws.send(JSON.stringify({
                             type: 'stream',
-                            article: remainingArticles[index],
-                            index: index + 11, // +11 because we already sent 10
+                            article: articlesToStream[streamIndex],
+                            index: currentArticleIndex + 1, // 1-based for display
                             total: articles.length,
-                            message: `Article ${index + 11} of ${articles.length}`
+                            message: `Article ${currentArticleIndex + 1} of ${articles.length}`
                         }));
-                        index++;
+                        streamIndex++;
                     } else {
                         clearInterval(streamInterval);
 
                         if (ws.readyState === WebSocket.OPEN) {
                             ws.send(JSON.stringify({
                                 type: 'complete',
-                                message: 'All articles have been streamed'
+                                message: 'All articles have been streamed',
+                                finalIndex: articles.length
                             }));
                         }
                     }

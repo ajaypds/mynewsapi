@@ -26,17 +26,31 @@ class Server {
         //         .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
         //         .status.info { background-color: #d4edda; color: #155724; }
         //         .status.error { background-color: #f8d7da; color: #721c24; }
+        //         .status.warning { background-color: #fff3cd; color: #856404; }
         //         .stats { background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        //         .controls { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        //         .controls input { margin: 5px; padding: 5px; }
+        //         .controls button { margin: 5px; padding: 8px 12px; }
         //     </style>
         // </head>
         // <body>
         //     <h1>News API WebSocket Client</h1>
-        //     <button onclick="connect()">Connect to WebSocket</button>
-        //     <button onclick="disconnect()">Disconnect</button>
+        //     
+        //     <div class="controls">
+        //         <h3>Connection Controls</h3>
+        //         <button onclick="connect()">Connect from Start</button>
+        //         <button onclick="disconnect()">Disconnect</button>
+        //         <br><br>
+        //         <label for="resumeIndex">Resume from index:</label>
+        //         <input type="number" id="resumeIndex" min="0" value="0" placeholder="0">
+        //         <button onclick="connectWithResume()">Connect & Resume</button>
+        //         <br><small>Note: Index is 0-based (0 = first article, 10 = eleventh article, etc.)</small>
+        //     </div>
 
         //     <div id="status" class="status info">Ready to connect</div>
         //     <div id="stats" class="stats">
         //         <strong>Articles received:</strong> <span id="articleCount">0</span> / <span id="totalCount">0</span>
+        //         <br><strong>Current range:</strong> <span id="currentRange">Not connected</span>
         //     </div>
 
         //     <div id="articles"></div>
@@ -45,13 +59,36 @@ class Server {
         //         let ws;
         //         let articleCount = 0;
         //         let totalCount = 0;
+        //         let currentResumeIndex = 0;
 
         //         function connect() {
-        //             ws = new WebSocket('ws://localhost:${this.port}');
+        //             connectToWebSocket();
+        //         }
+
+        //         function connectWithResume() {
+        //             const resumeIndex = parseInt(document.getElementById('resumeIndex').value) || 0;
+        //             currentResumeIndex = resumeIndex;
+        //             connectToWebSocket(resumeIndex);
+        //         }
+
+        //         function connectToWebSocket(resumeFrom = null) {
+        //             let wsUrl = 'ws://localhost:${this.port}';
+        //             if (resumeFrom !== null && resumeFrom > 0) {
+        //                 wsUrl += '?resumeFrom=' + resumeFrom;
+        //             }
+
+        //             console.log('Connecting to:', wsUrl);
+        //             ws = new WebSocket(wsUrl);
 
         //             ws.onopen = function() {
-        //                 document.getElementById('status').innerHTML = 'Connected to WebSocket';
+        //                 document.getElementById('status').innerHTML = 'Connected to WebSocket' + 
+        //                     (resumeFrom ? ' (Resume from index ' + resumeFrom + ')' : '');
         //                 document.getElementById('status').className = 'status info';
+        //                 
+        //                 // Reset counters
+        //                 articleCount = 0;
+        //                 totalCount = 0;
+        //                 updateStats();
         //             };
 
         //             ws.onmessage = function(event) {
@@ -62,6 +99,7 @@ class Server {
         //             ws.onclose = function() {
         //                 document.getElementById('status').innerHTML = 'Disconnected from WebSocket';
         //                 document.getElementById('status').className = 'status error';
+        //                 document.getElementById('currentRange').textContent = 'Not connected';
         //             };
 
         //             ws.onerror = function(error) {
@@ -80,12 +118,21 @@ class Server {
         //             const articlesDiv = document.getElementById('articles');
 
         //             switch(data.type) {
+        //                 case 'info':
+        //                     document.getElementById('status').innerHTML = data.message;
+        //                     document.getElementById('status').className = 'status warning';
+        //                     totalCount = data.total;
+        //                     updateStats();
+        //                     break;
+
         //                 case 'batch':
         //                     totalCount = data.total;
         //                     articleCount += data.articles.length;
         //                     data.articles.forEach(article => displayArticle(article));
         //                     updateStats();
         //                     document.getElementById('status').innerHTML = data.message;
+        //                     document.getElementById('currentRange').textContent = 
+        //                         \`Articles \${(data.startIndex || 0) + 1}-\${(data.endIndex || data.articles.length - 1) + 1}\`;
         //                     break;
 
         //                 case 'stream':
