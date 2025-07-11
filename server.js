@@ -193,6 +193,7 @@ class Server {
                 timestamp: new Date().toISOString(),
                 endpoints: {
                     websocket: 'ws://localhost:3000',
+                    websocket_filter: 'ws://localhost:3000/filter',
                     health: '/api/health',
                     categories: '/api/categories',
                     stats: '/api/stats'
@@ -211,7 +212,8 @@ class Server {
                     category: 'ws://localhost:3000?category=Technology',
                     resume: 'ws://localhost:3000?resumeFrom=10',
                     date: 'ws://localhost:3000?date=2025-07-09',
-                    combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09'
+                    combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09',
+                    filter_only: 'ws://localhost:3000/filter?category=Technology&date=2025-07-09'
                 }
             }));
         } else if (req.url === '/api/stats') {

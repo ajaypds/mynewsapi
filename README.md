@@ -5,6 +5,7 @@ A comprehensive Node.js application that fetches daily news from NewsAPI.org, au
 ## 🎯 Features
 
 ### Core Functionality
+
 - **Smart News Fetching**: Automatically fetches news for any specified date with intelligent date validation
 - **Automatic Categorization**: AI-powered categorization based on article titles using advanced keyword matching
 - **MongoDB Storage**: Efficient storage with duplicate prevention, category indexing, and optimized queries
@@ -14,6 +15,7 @@ A comprehensive Node.js application that fetches daily news from NewsAPI.org, au
 - **Date Support**: Fetch and stream articles from any past date with comprehensive validation
 
 ### Supported Categories (13 Total)
+
 - **Politics** - Government, elections, political parties, democracy, ministers, parliament
 - **Business** - Economy, markets, corporate news, trading, stocks, IPOs, mergers
 - **Technology** - Tech innovations, AI, software, startups, programming, digital transformation
@@ -30,6 +32,7 @@ A comprehensive Node.js application that fetches daily news from NewsAPI.org, au
 - **General** - Miscellaneous news that doesn't fit other categories
 
 ### Advanced Streaming Features
+
 - **Smart Batching**: ≤10 articles sent at once, >10 articles use batch + streaming
 - **Resume Intelligence**: Skip processed articles and continue from any index
 - **Category Intelligence**: Automatic keyword-based categorization with scoring
@@ -40,12 +43,15 @@ A comprehensive Node.js application that fetches daily news from NewsAPI.org, au
 ## 🚀 Installation & Setup
 
 ### Prerequisites
+
 - Node.js 18+ (recommended via NVM)
 - MongoDB (local installation or MongoDB Atlas)
 - NewsAPI.org API key (free tier available)
 
 ### Environment Variables
+
 Create a `.env` file in the project root:
+
 ```env
 NEWS_API_KEY=your_newsapi_key_here
 MONGODB_URI=mongodb://localhost:27017/news-api
@@ -54,6 +60,7 @@ STREAM_INTERVAL_SECONDS=120
 ```
 
 ### Quick Start
+
 ```bash
 # Clone and navigate
 git clone <your-repo-url>
@@ -72,54 +79,66 @@ npm start
 ## 🌐 WebSocket API Reference
 
 ### Basic Connection
+
 ```javascript
 // Stream all articles from yesterday (default behavior)
-const ws = new WebSocket('ws://localhost:3000');
+const ws = new WebSocket("ws://localhost:3000");
 ```
 
 ### Resume from Specific Index
+
 ```javascript
 // Resume from 11th article (0-based index 10)
-const ws = new WebSocket('ws://localhost:3000?resumeFrom=10');
+const ws = new WebSocket("ws://localhost:3000?resumeFrom=10");
 
 // Resume from 26th article (0-based index 25)
-const ws = new WebSocket('ws://localhost:3000?resumeFrom=25');
+const ws = new WebSocket("ws://localhost:3000?resumeFrom=25");
 ```
 
 ### Category Filtering
+
 ```javascript
 // Stream only Technology articles
-const ws = new WebSocket('ws://localhost:3000?category=Technology');
+const ws = new WebSocket("ws://localhost:3000?category=Technology");
 
 // Stream only Sports articles
-const ws = new WebSocket('ws://localhost:3000?category=Sports');
+const ws = new WebSocket("ws://localhost:3000?category=Sports");
 
 // Stream only Politics articles
-const ws = new WebSocket('ws://localhost:3000?category=Politics');
+const ws = new WebSocket("ws://localhost:3000?category=Politics");
 ```
 
 ### Date-based Queries
+
 ```javascript
 // Get articles from July 9, 2025
-const ws = new WebSocket('ws://localhost:3000?date=2025-07-09');
+const ws = new WebSocket("ws://localhost:3000?date=2025-07-09");
 
 // Get Technology articles from a specific date
-const ws = new WebSocket('ws://localhost:3000?category=Technology&date=2025-07-08');
+const ws = new WebSocket(
+  "ws://localhost:3000?category=Technology&date=2025-07-08"
+);
 ```
 
 ### Advanced Combined Queries
+
 ```javascript
 // Resume from 6th Sports article on July 9th
-const ws = new WebSocket('ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09');
+const ws = new WebSocket(
+  "ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09"
+);
 
 // Resume from 15th article of any category on a specific date
-const ws = new WebSocket('ws://localhost:3000?resumeFrom=14&date=2025-07-07');
+const ws = new WebSocket("ws://localhost:3000?resumeFrom=14&date=2025-07-07");
 
 // Get Business articles from July 8th, starting from 3rd article
-const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&resumeFrom=2');
+const ws = new WebSocket(
+  "ws://localhost:3000?category=Business&date=2025-07-08&resumeFrom=2"
+);
 ```
 
 ### Date Validation Logic
+
 - **No date provided**: Uses yesterday's date automatically
 - **Date is today or future**: Falls back to yesterday's date with warning
 - **Date is in the past**: Uses the provided date
@@ -129,6 +148,7 @@ const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&
 ## 📱 WebSocket Message Protocols
 
 ### Batch Message (Initial 10 articles)
+
 ```json
 {
   "type": "batch",
@@ -158,6 +178,7 @@ const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&
 ```
 
 ### Stream Message (Individual articles)
+
 ```json
 {
   "type": "stream",
@@ -184,6 +205,7 @@ const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&
 ```
 
 ### Error Messages
+
 ```json
 {
   "type": "error",
@@ -191,7 +213,7 @@ const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&
 }
 
 {
-  "type": "error", 
+  "type": "error",
   "message": "Resume index 100 is beyond available articles (95)"
 }
 
@@ -204,6 +226,7 @@ const ws = new WebSocket('ws://localhost:3000?category=Business&date=2025-07-08&
 ## 🔧 HTTP REST API
 
 ### Health Check & Server Info
+
 ```bash
 GET /api/health
 
@@ -215,20 +238,21 @@ Response:
   "endpoints": {
     "websocket": "ws://localhost:3000",
     "health": "/api/health",
-    "categories": "/api/categories", 
+    "categories": "/api/categories",
     "stats": "/api/stats"
   }
 }
 ```
 
 ### Available Categories & Usage Examples
+
 ```bash
 GET /api/categories
 
 Response:
 {
   "categories": [
-    "Politics", "Business", "Technology", "Sports", 
+    "Politics", "Business", "Technology", "Sports",
     "Entertainment", "Health", "Science", "Education",
     "Crime", "International", "Environment", "Economy", "Defense"
   ],
@@ -243,6 +267,7 @@ Response:
 ```
 
 ### Category Statistics & Analytics
+
 ```bash
 GET /api/stats
 
@@ -265,76 +290,83 @@ Response:
 ## 💻 Client Implementation Examples
 
 ### JavaScript WebSocket Client
+
 ```javascript
 class NewsClient {
-    constructor() {
-        this.articleCount = 0;
-        this.totalCount = 0;
+  constructor() {
+    this.articleCount = 0;
+    this.totalCount = 0;
+  }
+
+  connect(options = {}) {
+    const { category, resumeFrom, date } = options;
+    let url = "ws://localhost:3000";
+
+    const params = new URLSearchParams();
+    if (category) params.append("category", category);
+    if (resumeFrom) params.append("resumeFrom", resumeFrom);
+    if (date) params.append("date", date);
+
+    if (params.toString()) {
+      url += "?" + params.toString();
     }
 
-    connect(options = {}) {
-        const { category, resumeFrom, date } = options;
-        let url = 'ws://localhost:3000';
-        
-        const params = new URLSearchParams();
-        if (category) params.append('category', category);
-        if (resumeFrom) params.append('resumeFrom', resumeFrom);
-        if (date) params.append('date', date);
-        
-        if (params.toString()) {
-            url += '?' + params.toString();
-        }
+    console.log("Connecting to:", url);
+    this.ws = new WebSocket(url);
+    this.setupEventHandlers();
+  }
 
-        console.log('Connecting to:', url);
-        this.ws = new WebSocket(url);
-        this.setupEventHandlers();
+  setupEventHandlers() {
+    this.ws.onopen = () => {
+      console.log("Connected to News API");
+    };
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.handleMessage(data);
+    };
+
+    this.ws.onclose = () => {
+      console.log("Connection closed - all articles received");
+    };
+
+    this.ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+  }
+
+  handleMessage(data) {
+    switch (data.type) {
+      case "batch":
+        console.log(`Received batch: ${data.articles.length} articles`);
+        this.totalCount = data.total;
+        this.articleCount += data.articles.length;
+        data.articles.forEach((article) => this.displayArticle(article));
+        break;
+
+      case "stream":
+        console.log(
+          `Received article ${data.index}/${data.total}: ${data.article.title}`
+        );
+        this.articleCount++;
+        this.displayArticle(data.article);
+        break;
+
+      case "error":
+        console.error("Server error:", data.message);
+        break;
     }
+  }
 
-    setupEventHandlers() {
-        this.ws.onopen = () => {
-            console.log('Connected to News API');
-        };
-
-        this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleMessage(data);
-        };
-
-        this.ws.onclose = () => {
-            console.log('Connection closed - all articles received');
-        };
-
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-    }
-
-    handleMessage(data) {
-        switch(data.type) {
-            case 'batch':
-                console.log(`Received batch: ${data.articles.length} articles`);
-                this.totalCount = data.total;
-                this.articleCount += data.articles.length;
-                data.articles.forEach(article => this.displayArticle(article));
-                break;
-
-            case 'stream':
-                console.log(`Received article ${data.index}/${data.total}: ${data.article.title}`);
-                this.articleCount++;
-                this.displayArticle(data.article);
-                break;
-
-            case 'error':
-                console.error('Server error:', data.message);
-                break;
-        }
-    }
-
-    displayArticle(article) {
-        console.log(`[${article.category}] ${article.title}`);
-        console.log(`Source: ${article.source.name} | ${new Date(article.publishedAt).toLocaleString()}`);
-        console.log(`URL: ${article.url}\n`);
-    }
+  displayArticle(article) {
+    console.log(`[${article.category}] ${article.title}`);
+    console.log(
+      `Source: ${article.source.name} | ${new Date(
+        article.publishedAt
+      ).toLocaleString()}`
+    );
+    console.log(`URL: ${article.url}\n`);
+  }
 }
 
 // Usage Examples
@@ -345,18 +377,19 @@ client.connect();
 
 // Get Technology articles from a specific date
 client.connect({
-    category: 'Technology',
-    date: '2025-07-09'
+  category: "Technology",
+  date: "2025-07-09",
 });
 
 // Resume Sports articles from index 10
 client.connect({
-    category: 'Sports',
-    resumeFrom: 10
+  category: "Sports",
+  resumeFrom: 10,
 });
 ```
 
 ### Python WebSocket Client
+
 ```python
 import asyncio
 import websockets
@@ -370,7 +403,7 @@ class NewsClient:
 
     async def connect(self, category=None, resume_from=None, date=None):
         url = "ws://localhost:3000"
-        
+
         params = {}
         if category:
             params['category'] = category
@@ -378,12 +411,12 @@ class NewsClient:
             params['resumeFrom'] = resume_from
         if date:
             params['date'] = date
-            
+
         if params:
             url += '?' + urlencode(params)
-            
+
         print(f"Connecting to: {url}")
-        
+
         async with websockets.connect(url) as websocket:
             async for message in websocket:
                 data = json.loads(message)
@@ -394,15 +427,15 @@ class NewsClient:
             print(f"Received batch: {len(data['articles'])} articles")
             self.total_count = data['total']
             self.article_count += len(data['articles'])
-            
+
             for article in data['articles']:
                 self.display_article(article)
-                
+
         elif data['type'] == 'stream':
             print(f"Received article {data['index']}/{data['total']}: {data['article']['title']}")
             self.article_count += 1
             self.display_article(data['article'])
-            
+
         elif data['type'] == 'error':
             print(f"Server error: {data['message']}")
 
@@ -414,7 +447,7 @@ class NewsClient:
 # Usage
 async def main():
     client = NewsClient()
-    
+
     # Get Technology articles from July 9th
     await client.connect(category='Technology', date='2025-07-09')
 
@@ -425,6 +458,7 @@ if __name__ == "__main__":
 ## 🏗️ Architecture & Technical Details
 
 ### Project Structure
+
 ```
 news-api/
 ├── config/
@@ -444,6 +478,7 @@ news-api/
 ```
 
 ### Database Schema & Indexing
+
 ```javascript
 // NewsArticle Schema
 {
@@ -467,6 +502,7 @@ news-api/
 ```
 
 ### Categorization Algorithm
+
 1. **Keyword Extraction**: Extract keywords from article titles
 2. **Category Scoring**: Score each category based on keyword matches
 3. **Weight Assignment**: Exact word matches get higher scores than partial matches
@@ -474,6 +510,7 @@ news-api/
 5. **Fallback Handling**: Default to "General" if no matches found
 
 ### Smart Date Processing
+
 1. **Input Validation**: Check date format and validity
 2. **Temporal Logic**: Reject future dates, accept past dates
 3. **Automatic Fallback**: Use yesterday's date for invalid inputs
@@ -482,6 +519,7 @@ news-api/
 ## 🔧 Configuration & Environment
 
 ### Environment Variables
+
 ```env
 # Required
 NEWS_API_KEY=your_newsapi_org_key
@@ -489,7 +527,7 @@ NEWS_API_KEY=your_newsapi_org_key
 # Database
 MONGODB_URI=mongodb://localhost:27017/news-api
 
-# Server Configuration  
+# Server Configuration
 PORT=3000
 STREAM_INTERVAL_SECONDS=120
 
@@ -499,10 +537,11 @@ NODE_ENV=production
 ```
 
 ### NPM Scripts
+
 ```json
 {
-  "start": "node server.js",           // Production server
-  "dev": "nodemon server.js",          // Development with auto-reload
+  "start": "node server.js", // Production server
+  "dev": "nodemon server.js", // Development with auto-reload
   "build": "echo 'No build required'", // Placeholder
   "test": "echo 'Tests not configured'", // Placeholder
   "lint": "echo 'Linting not configured'", // Placeholder
@@ -513,6 +552,7 @@ NODE_ENV=production
 ## 🚀 Production Deployment
 
 ### AWS EC2 Deployment Guide
+
 1. **Launch EC2 Instance** (Ubuntu 20.04+)
 2. **Install Node.js via NVM**
 3. **Setup MongoDB** (local or Atlas)
@@ -522,6 +562,7 @@ NODE_ENV=production
 7. **Configure Security Groups**
 
 ### Process Management with PM2
+
 ```bash
 # Install PM2 globally
 npm install -g pm2
@@ -544,6 +585,7 @@ pm2 startup
 ```
 
 ### Nginx Configuration
+
 ```nginx
 server {
     listen 80;
@@ -566,6 +608,7 @@ server {
 ## 📊 Performance & Monitoring
 
 ### Performance Features
+
 - **Efficient MongoDB Queries**: Optimized indexes for fast retrieval
 - **Connection Pooling**: Mongoose connection pooling
 - **Memory Management**: Stream processing without loading all articles
@@ -574,6 +617,7 @@ server {
 - **Background Processing**: Non-blocking article processing
 
 ### Monitoring & Logging
+
 - **Connection Logging**: Track WebSocket connections/disconnections
 - **Error Handling**: Comprehensive error logging and recovery
 - **Performance Metrics**: Article processing times and counts
@@ -582,6 +626,7 @@ server {
 ## 🔒 Security & Best Practices
 
 ### Security Measures
+
 - **Environment Variables**: Secure credential management
 - **Input Validation**: Query parameter validation and sanitization
 - **MongoDB Injection Prevention**: Mongoose schema validation
@@ -589,6 +634,7 @@ server {
 - **Connection Limits**: WebSocket connection management
 
 ### Best Practices Implemented
+
 - **RESTful API Design**: Clean and intuitive endpoint structure
 - **Error Messages**: User-friendly error messages
 - **Documentation**: Comprehensive API documentation
