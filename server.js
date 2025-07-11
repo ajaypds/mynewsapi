@@ -187,10 +187,60 @@ class Server {
         // } else 
         if (req.url === '/api/health') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'OK', timestamp: new Date().toISOString() }));
+            res.end(JSON.stringify({
+                status: 'OK',
+                message: 'News API Server is running',
+                timestamp: new Date().toISOString(),
+                endpoints: {
+                    websocket: 'ws://localhost:3000',
+                    health: '/api/health',
+                    categories: '/api/categories',
+                    stats: '/api/stats'
+                }
+            }));
+        } else if (req.url === '/api/categories') {
+            // Return available categories
+            const CategoryService = require('./services/CategoryService');
+            const categoryService = new CategoryService();
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                categories: categoryService.getAvailableCategories(),
+                usage: {
+                    all: 'ws://localhost:3000',
+                    category: 'ws://localhost:3000?category=Technology',
+                    resume: 'ws://localhost:3000?resumeFrom=10',
+                    date: 'ws://localhost:3000?date=2025-07-09',
+                    combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09'
+                }
+            }));
+        } else if (req.url === '/api/stats') {
+            // Return category statistics
+            const NewsService = require('./services/NewsService');
+            const newsService = new NewsService();
+
+            newsService.getCategoryStats()
+                .then(stats => {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        date: newsService.getYesterdayDate(),
+                        statistics: stats,
+                        total: stats.reduce((sum, stat) => sum + stat.count, 0)
+                    }));
+                })
+                .catch(error => {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: 'Failed to get category statistics',
+                        message: error.message
+                    }));
+                });
         } else {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: 'Not Found',
+                message: 'The requested endpoint does not exist'
+            }));
         }
     }
 

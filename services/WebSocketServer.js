@@ -16,8 +16,16 @@ class WebSocketServer {
             // Parse query parameters from URL
             const parsedUrl = url.parse(req.url, true);
             const resumeFromIndex = parseInt(parsedUrl.query.resumeFrom) || 0;
+            const category = parsedUrl.query.category; // Support category filtering
+            const date = parsedUrl.query.date; // Support date filtering
 
             console.log(`Resume from index: ${resumeFromIndex}`);
+            if (category) {
+                console.log(`Filtering by category: ${category}`);
+            }
+            if (date) {
+                console.log(`Using date: ${date}`);
+            }
 
             ws.on('message', (message) => {
                 console.log('Received message:', message.toString());
@@ -31,19 +39,28 @@ class WebSocketServer {
                 console.error('WebSocket error:', error);
             });
 
-            // Start streaming news to the connected client with resume index
-            this.streamNews(ws, resumeFromIndex);
+            // Start streaming news to the connected client with resume index, category filter, and date
+            this.streamNews(ws, resumeFromIndex, category, date);
         });
     }
 
-    async streamNews(ws, resumeFromIndex = 0) {
+    async streamNews(ws, resumeFromIndex = 0, category = null, date = null) {
         try {
-            const articles = await this.newsService.getNews();
+            // Get articles - either all or filtered by category
+            let articles;
+            if (category) {
+                articles = await this.newsService.getNewsByCategory(category, date);
+            } else {
+                articles = await this.newsService.getNews(date);
+            }
 
             if (articles.length === 0) {
+                const message = category
+                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
+                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
                 ws.send(JSON.stringify({
                     type: 'error',
-                    message: 'No news articles available for yesterday'
+                    message: message
                 }));
                 return;
             }
@@ -71,12 +88,18 @@ class WebSocketServer {
                 const streamInterval = setInterval(() => {
                     if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
                         const currentArticleIndex = resumeFromIndex + streamIndex;
+                        const article = articlesToStream[streamIndex];
+
                         ws.send(JSON.stringify({
                             type: 'stream',
-                            article: articlesToStream[streamIndex],
+                            article: {
+                                ...article.toObject(),
+                                category: article.category // Include category in response
+                            },
                             index: currentArticleIndex + 1, // 1-based for display
                             total: articles.length,
-                            message: `Article ${currentArticleIndex + 1} of ${articles.length}`
+                            category: article.category, // Add category at top level for easy access
+                            message: `Article ${currentArticleIndex + 1} of ${articles.length} (${article.category})`
                         }));
                         streamIndex++;
                     } else {
@@ -101,12 +124,15 @@ class WebSocketServer {
                 const batchSize = Math.min(10, remainingArticles.length);
                 const initialBatch = remainingArticles.slice(0, batchSize);
 
-                // Send initial batch
+                // Send initial batch with category information
                 if (remainingArticles.length <= 10) {
                     // Send all remaining articles at once
                     ws.send(JSON.stringify({
                         type: 'batch',
-                        articles: initialBatch,
+                        articles: initialBatch.map(article => ({
+                            ...article.toObject(),
+                            category: article.category
+                        })),
                         total: articles.length,
                         startIndex: resumeFromIndex,
                         endIndex: resumeFromIndex + initialBatch.length - 1,
@@ -116,7 +142,10 @@ class WebSocketServer {
                     // Send first batch immediately
                     ws.send(JSON.stringify({
                         type: 'batch',
-                        articles: initialBatch,
+                        articles: initialBatch.map(article => ({
+                            ...article.toObject(),
+                            category: article.category
+                        })),
                         total: articles.length,
                         startIndex: resumeFromIndex,
                         endIndex: resumeFromIndex + batchSize - 1,
@@ -136,12 +165,18 @@ class WebSocketServer {
                     const streamInterval = setInterval(() => {
                         if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
                             const currentArticleIndex = resumeFromIndex + batchSize + streamIndex;
+                            const article = articlesToStream[streamIndex];
+
                             ws.send(JSON.stringify({
                                 type: 'stream',
-                                article: articlesToStream[streamIndex],
+                                article: {
+                                    ...article.toObject(),
+                                    category: article.category
+                                },
                                 index: currentArticleIndex + 1, // 1-based for display
                                 total: articles.length,
-                                message: `Article ${currentArticleIndex + 1} of ${articles.length}`
+                                category: article.category,
+                                message: `Article ${currentArticleIndex + 1} of ${articles.length} (${article.category})`
                             }));
                             streamIndex++;
                         } else {

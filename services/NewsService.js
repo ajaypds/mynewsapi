@@ -1,10 +1,12 @@
 const axios = require('axios');
 const NewsArticle = require('../models/NewsArticle');
+const CategoryService = require('./CategoryService');
 
 class NewsService {
     constructor() {
         this.apiKey = process.env.NEWS_API_KEY;
         this.baseUrl = 'https://newsapi.org/v2';
+        this.categoryService = new CategoryService();
     }
 
     // Get date one day before current date
@@ -12,6 +14,41 @@ class NewsService {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         return yesterday.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    }
+
+    // Get today's date
+    getTodayDate() {
+        const today = new Date();
+        return today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    }
+
+    // Validate and process date parameter
+    processDateParameter(dateParam) {
+        if (!dateParam) {
+            return this.getYesterdayDate();
+        }
+
+        const inputDate = new Date(dateParam);
+        const today = new Date(this.getTodayDate());
+        const yesterday = new Date(this.getYesterdayDate());
+
+        // If invalid date, use yesterday
+        if (isNaN(inputDate.getTime())) {
+            console.log(`Invalid date provided: ${dateParam}, using yesterday's date`);
+            return this.getYesterdayDate();
+        }
+
+        const inputDateStr = inputDate.toISOString().split('T')[0];
+        const todayStr = today.toISOString().split('T')[0];
+
+        // If date is today or in future, use yesterday
+        if (inputDateStr >= todayStr) {
+            console.log(`Date ${inputDateStr} is today or future, using yesterday's date`);
+            return this.getYesterdayDate();
+        }
+
+        // Use the provided date (it's in the past)
+        return inputDateStr;
     }
 
     // Fetch news from NewsAPI
@@ -44,18 +81,21 @@ class NewsService {
         }
     }
 
-    // Save articles to MongoDB
+    // Save articles to database with automatic categorization
     async saveArticlesToDB(articles, fetchDate) {
         try {
-            const savedArticles = [];
-            let duplicateCount = 0;
-            let errorCount = 0;
-
             console.log(`Starting to save ${articles.length} articles to database...`);
+            let saved = 0;
+            let duplicates = 0;
+            let errors = 0;
 
             for (let i = 0; i < articles.length; i++) {
-                const article = articles[i];
                 try {
+                    const article = articles[i];
+
+                    // Automatically categorize based on title
+                    const category = this.categoryService.categorizeByTitle(article.title);
+
                     const newsArticle = new NewsArticle({
                         source: article.source,
                         author: article.author,
@@ -65,31 +105,33 @@ class NewsService {
                         urlToImage: article.urlToImage,
                         publishedAt: new Date(article.publishedAt),
                         content: article.content,
-                        fetchDate: fetchDate
+                        fetchDate: fetchDate,
+                        category: category // Add the categorized field
                     });
 
-                    const saved = await newsArticle.save();
-                    savedArticles.push(saved);
+                    await newsArticle.save();
+                    saved++;
 
-                    // Log progress every 50 articles
+                    console.log(`Article categorized as "${category}": ${article.title.substring(0, 50)}...`);
+
+                    // Progress logging every 50 articles
                     if ((i + 1) % 50 === 0) {
-                        console.log(`Saved ${i + 1}/${articles.length} articles...`);
+                        console.log(`Saved ${saved}/${articles.length} articles...`);
                     }
-                } catch (error) {
-                    // Skip duplicate articles (unique constraint on URL)
-                    if (error.code === 11000) {
-                        duplicateCount++;
+                } catch (saveError) {
+                    if (saveError.code === 11000) {
+                        duplicates++;
                     } else {
-                        errorCount++;
-                        console.error(`Error saving article ${i + 1}:`, error.message);
+                        errors++;
+                        console.error(`Error saving article ${i + 1}:`, saveError.message);
                     }
                 }
             }
 
-            console.log(`Database save complete: ${savedArticles.length} saved, ${duplicateCount} duplicates skipped, ${errorCount} errors`);
-            return savedArticles;
+            console.log(`Database save complete: ${saved} saved, ${duplicates} duplicates skipped, ${errors} errors`);
+            return { saved, duplicates, errors };
         } catch (error) {
-            console.error('Error saving articles to database:', error.message);
+            console.error('Error in saveArticlesToDB:', error.message);
             throw error;
         }
     }
@@ -97,16 +139,18 @@ class NewsService {
     // Get articles from database for a specific date
     async getArticlesFromDB(date) {
         try {
-            const startDate = new Date(date);
-            const endDate = new Date(date);
-            endDate.setDate(endDate.getDate() + 1);
+            const startOfDay = new Date(date);
+            startOfDay.setUTCHours(0, 0, 0, 0);
+
+            const endOfDay = new Date(date);
+            endOfDay.setUTCHours(23, 59, 59, 999);
 
             const articles = await NewsArticle.find({
-                fetchDate: {
-                    $gte: startDate,
-                    $lt: endDate
+                publishedAt: {
+                    $gte: startOfDay,
+                    $lte: endOfDay
                 }
-            }).sort({ publishedAt: 1 }); // Sort oldest first (newest articles will be streamed last)
+            }).sort({ publishedAt: 1 }); // Sort oldest first for proper streaming order
 
             return articles;
         } catch (error) {
@@ -115,28 +159,127 @@ class NewsService {
         }
     }
 
-    // Main method to get news (from DB or API)
-    async getNews() {
+    // Main method to get news (from DB or API) - supports date parameter
+    async getNews(date = null) {
         try {
-            const yesterdayDate = this.getYesterdayDate();
-            const fetchDate = new Date(yesterdayDate);
+            const targetDate = this.processDateParameter(date);
+            console.log(`Getting news for date: ${targetDate}`);
 
-            // First, try to get from database
-            let articles = await this.getArticlesFromDB(fetchDate);
+            // First check if we have articles in database for this date
+            let articles = await this.getArticlesFromDB(targetDate);
 
-            // If no articles in database, fetch from API
             if (articles.length === 0) {
-                console.log('No articles in database for', yesterdayDate, '- fetching from API...');
-                const apiArticles = await this.fetchNewsFromAPI(yesterdayDate);
-                articles = await this.saveArticlesToDB(apiArticles, fetchDate);
-                console.log(`Fetched and saved ${articles.length} articles from API`);
+                console.log(`No articles in database for ${targetDate} - fetching from API...`);
+
+                // Fetch from API
+                const apiArticles = await this.fetchNewsFromAPI(targetDate);
+
+                if (apiArticles.length > 0) {
+                    // Save to database with automatic categorization
+                    await this.saveArticlesToDB(apiArticles, new Date(targetDate));
+
+                    // Fetch the saved articles from database
+                    articles = await this.getArticlesFromDB(targetDate);
+
+                    console.log(`Fetched and saved ${articles.length} articles from API`);
+                }
             } else {
-                console.log(`Found ${articles.length} articles in database for ${yesterdayDate}`);
+                console.log(`Found ${articles.length} articles in database for ${targetDate}`);
             }
 
             return articles;
         } catch (error) {
             console.error('Error in getNews:', error.message);
+            throw error;
+        }
+    }
+
+    // Get articles by category
+    async getNewsByCategory(category, date = null) {
+        try {
+            const targetDate = this.processDateParameter(date);
+            console.log(`Getting ${category} news for date: ${targetDate}`);
+
+            const startOfDay = new Date(targetDate);
+            startOfDay.setUTCHours(0, 0, 0, 0);
+
+            const endOfDay = new Date(targetDate);
+            endOfDay.setUTCHours(23, 59, 59, 999);
+
+            // First try to get from database
+            let articles = await NewsArticle.find({
+                category: category,
+                publishedAt: {
+                    $gte: startOfDay,
+                    $lte: endOfDay
+                }
+            }).sort({ publishedAt: 1 });
+
+            // If no articles in database for this date, fetch all articles first
+            if (articles.length === 0) {
+                console.log(`No ${category} articles in database for ${targetDate} - checking if any articles exist...`);
+
+                const allArticles = await this.getArticlesFromDB(targetDate);
+
+                if (allArticles.length === 0) {
+                    // No articles at all for this date, fetch from API
+                    console.log(`No articles in database for ${targetDate} - fetching from API...`);
+                    await this.getNews(targetDate);
+
+                    // Now try to get category articles again
+                    articles = await NewsArticle.find({
+                        category: category,
+                        publishedAt: {
+                            $gte: startOfDay,
+                            $lte: endOfDay
+                        }
+                    }).sort({ publishedAt: 1 });
+                }
+            }
+
+            console.log(`Found ${articles.length} articles in "${category}" category for ${targetDate}`);
+            return articles;
+        } catch (error) {
+            console.error('Error in getNewsByCategory:', error.message);
+            throw error;
+        }
+    }
+
+    // Get category statistics
+    async getCategoryStats(date = null) {
+        try {
+            const targetDate = this.processDateParameter(date);
+
+            const startOfDay = new Date(targetDate);
+            startOfDay.setUTCHours(0, 0, 0, 0);
+
+            const endOfDay = new Date(targetDate);
+            endOfDay.setUTCHours(23, 59, 59, 999);
+
+            const stats = await NewsArticle.aggregate([
+                {
+                    $match: {
+                        publishedAt: {
+                            $gte: startOfDay,
+                            $lte: endOfDay
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$category',
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $sort: { count: -1 }
+                }
+            ]);
+
+            console.log(`Category statistics for ${targetDate}:`, stats);
+            return stats;
+        } catch (error) {
+            console.error('Error in getCategoryStats:', error.message);
             throw error;
         }
     }
