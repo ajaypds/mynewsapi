@@ -21,29 +21,10 @@ class WebSocketServer {
 
             // Parse query parameters from URL
             const parsedUrl = url.parse(req.url, true);
-            const pathname = parsedUrl.pathname;
 
-            // Route to different handlers based on path
-            if (pathname === '/filter') {
-                this.handleFilterConnection(ws, parsedUrl.query);
-            } else {
-                this.handleDefaultConnection(ws, parsedUrl.query);
-            }
+            // Only handle default connection (filter is now HTTP-only)
+            this.handleDefaultConnection(ws, parsedUrl.query);
         });
-    }
-
-    // New endpoint: /filter - only supports category and date (no resumeFrom)
-    handleFilterConnection(ws, query) {
-        const category = query.category;
-        const date = query.date;
-
-        console.log(`Filter endpoint - Category: ${category || 'all'}, Date: ${date || 'yesterday'}`);
-
-        // Set up event handlers
-        this.setupEventHandlers(ws);
-
-        // Start streaming with filter (always from beginning, no resumeFrom)
-        this.streamNewsFiltered(ws, category, date);
     }
 
     // Default endpoint: / - supports all parameters including resumeFrom
@@ -80,119 +61,6 @@ class WebSocketServer {
         ws.on('error', (error) => {
             console.error('WebSocket error:', error);
         });
-    }
-
-    // New method: Simplified streaming for filter endpoint (no resume support)
-    async streamNewsFiltered(ws, category = null, date = null) {
-        try {
-            // Get articles - either all or filtered by category
-            let articles;
-            if (category) {
-                articles = await this.newsService.getNewsByCategory(category, date);
-            } else {
-                articles = await this.newsService.getNews(date);
-            }
-
-            if (articles.length === 0) {
-                const message = category
-                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
-                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
-                ws.send(JSON.stringify({
-                    type: 'error',
-                    message: message
-                }));
-                return;
-            }
-
-            // Always start from beginning for filter endpoint
-            const batchSize = Math.min(10, articles.length);
-            const initialBatch = articles.slice(0, batchSize);
-
-            // Send initial batch
-            if (articles.length <= 10) {
-                // Send all articles at once
-                ws.send(JSON.stringify({
-                    type: 'batch',
-                    articles: initialBatch.map(article => ({
-                        ...article.toObject(),
-                        category: article.category
-                    })),
-                    total: articles.length,
-                    startIndex: 0,
-                    endIndex: initialBatch.length - 1,
-                    message: `All ${articles.length} articles sent`,
-                    endpoint: 'filter'
-                }));
-
-                // Close connection after sending all articles
-                setTimeout(() => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.close();
-                    }
-                }, 100);
-            } else {
-                // Send first batch immediately
-                ws.send(JSON.stringify({
-                    type: 'batch',
-                    articles: initialBatch.map(article => ({
-                        ...article.toObject(),
-                        category: article.category
-                    })),
-                    total: articles.length,
-                    startIndex: 0,
-                    endIndex: batchSize - 1,
-                    message: `First ${batchSize} articles sent. ${articles.length - batchSize} more to follow.`,
-                    endpoint: 'filter'
-                }));
-
-                // Stream remaining articles
-                const articlesToStream = articles.slice(batchSize);
-                let streamIndex = 0;
-
-                const streamIntervalSeconds = parseInt(process.env.STREAM_INTERVAL_SECONDS) || 120;
-                const streamIntervalMs = streamIntervalSeconds * 1000;
-
-                console.log(`Filter endpoint: Streaming remaining ${articlesToStream.length} articles every ${streamIntervalSeconds} second(s)`);
-
-                const streamInterval = setInterval(() => {
-                    if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
-                        const currentArticleIndex = batchSize + streamIndex;
-                        const article = articlesToStream[streamIndex];
-
-                        ws.send(JSON.stringify({
-                            type: 'stream',
-                            article: {
-                                ...article.toObject(),
-                                category: article.category
-                            },
-                            index: currentArticleIndex + 1,
-                            total: articles.length,
-                            category: article.category,
-                            message: `Article ${currentArticleIndex + 1} of ${articles.length} (${article.category})`,
-                            endpoint: 'filter'
-                        }));
-                        streamIndex++;
-                    } else {
-                        clearInterval(streamInterval);
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.close();
-                        }
-                    }
-                }, streamIntervalMs);
-
-                // Clear interval if client disconnects
-                ws.on('close', () => {
-                    clearInterval(streamInterval);
-                });
-            }
-        } catch (error) {
-            console.error('Error in filter endpoint:', error.message);
-            ws.send(JSON.stringify({
-                type: 'error',
-                message: 'Error fetching news articles',
-                endpoint: 'filter'
-            }));
-        }
     }
 
     async streamNews(ws, resumeFromIndex = 0, category = null, date = null) {

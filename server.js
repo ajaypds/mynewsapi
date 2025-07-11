@@ -193,7 +193,7 @@ class Server {
                 timestamp: new Date().toISOString(),
                 endpoints: {
                     websocket: 'ws://localhost:3000',
-                    websocket_filter: 'ws://localhost:3000/filter',
+                    http_filter: '/filter?category=Technology&date=2025-01-09',
                     health: '/api/health',
                     categories: '/api/categories',
                     stats: '/api/stats'
@@ -213,7 +213,7 @@ class Server {
                     resume: 'ws://localhost:3000?resumeFrom=10',
                     date: 'ws://localhost:3000?date=2025-07-09',
                     combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09',
-                    filter_only: 'ws://localhost:3000/filter?category=Technology&date=2025-07-09'
+                    filter_http: '/filter?category=Technology&date=2025-07-09'
                 }
             }));
         } else if (req.url === '/api/stats') {
@@ -237,11 +237,88 @@ class Server {
                         message: error.message
                     }));
                 });
+        } else if (req.url.startsWith('/filter')) {
+            // HTTP endpoint for filtering articles by category and date (no resumeFrom)
+            this.handleFilterRequest(req, res);
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: 'Not Found',
                 message: 'The requested endpoint does not exist'
+            }));
+        }
+    }
+
+    async handleFilterRequest(req, res) {
+        try {
+            const url = require('url');
+            const parsedUrl = url.parse(req.url, true);
+            const query = parsedUrl.query;
+
+            // Extract filter parameters
+            const category = query.category;
+            const date = query.date;
+
+            console.log(`HTTP Filter request - Category: ${category || 'all'}, Date: ${date || 'yesterday'}`);
+
+            // Initialize NewsService
+            const NewsService = require('./services/NewsService');
+            const newsService = new NewsService();
+
+            // Get filtered articles
+            let articles;
+            if (category) {
+                articles = await newsService.getNewsByCategory(category, date);
+            } else {
+                articles = await newsService.getNews(date);
+            }
+
+            if (articles.length === 0) {
+                const message = category
+                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
+                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
+
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    message: message,
+                    articles: [],
+                    total: 0,
+                    filters: {
+                        category: category || null,
+                        date: date || newsService.getYesterdayDate()
+                    }
+                }));
+                return;
+            }
+
+            // Convert articles to plain objects and include category
+            const responseArticles = articles.map(article => ({
+                ...article.toObject(),
+                category: article.category
+            }));
+
+            // Send successful response
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `Found ${articles.length} articles${category ? ` in category "${category}"` : ''}${date ? ` for ${date}` : ''}`,
+                articles: responseArticles,
+                total: articles.length,
+                filters: {
+                    category: category || null,
+                    date: date || newsService.getYesterdayDate()
+                },
+                timestamp: new Date().toISOString()
+            }));
+
+        } catch (error) {
+            console.error('Error in HTTP filter endpoint:', error.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: 'Internal server error',
+                message: error.message
             }));
         }
     }
