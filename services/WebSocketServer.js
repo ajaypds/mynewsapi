@@ -4,7 +4,13 @@ const url = require('url');
 
 class WebSocketServer {
     constructor(server) {
-        this.wss = new WebSocket.Server({ server });
+        this.wss = new WebSocket.Server({
+            server,
+            verifyClient: (info) => {
+                // Accept all connections but we'll handle routing in the connection handler
+                return true;
+            }
+        });
         this.newsService = new NewsService();
         this.setupWebSocket();
     }
@@ -15,35 +21,65 @@ class WebSocketServer {
 
             // Parse query parameters from URL
             const parsedUrl = url.parse(req.url, true);
-            const resumeFromIndex = parseInt(parsedUrl.query.resumeFrom) || 0;
 
-            console.log(`Resume from index: ${resumeFromIndex}`);
-
-            ws.on('message', (message) => {
-                console.log('Received message:', message.toString());
-            });
-
-            ws.on('close', () => {
-                console.log('Client disconnected');
-            });
-
-            ws.on('error', (error) => {
-                console.error('WebSocket error:', error);
-            });
-
-            // Start streaming news to the connected client with resume index
-            this.streamNews(ws, resumeFromIndex);
+            // Only handle default connection (filter is now HTTP-only)
+            this.handleDefaultConnection(ws, parsedUrl.query);
         });
     }
 
-    async streamNews(ws, resumeFromIndex = 0) {
+    // Default endpoint: / - supports all parameters including resumeFrom
+    handleDefaultConnection(ws, query) {
+        const resumeFromIndex = parseInt(query.resumeFrom) || 0;
+        const category = query.category;
+        const date = query.date;
+
+        console.log(`Default endpoint - Resume from index: ${resumeFromIndex}`);
+        if (category) {
+            console.log(`Filtering by category: ${category}`);
+        }
+        if (date) {
+            console.log(`Using date: ${date}`);
+        }
+
+        // Set up event handlers
+        this.setupEventHandlers(ws);
+
+        // Start streaming with all features including resume
+        this.streamNews(ws, resumeFromIndex, category, date);
+    }
+
+    // Common event handlers for both endpoints
+    setupEventHandlers(ws) {
+        ws.on('message', (message) => {
+            console.log('Received message:', message.toString());
+        });
+
+        ws.on('close', () => {
+            console.log('Client disconnected');
+        });
+
+        ws.on('error', (error) => {
+            console.error('WebSocket error:', error);
+        });
+    }
+
+    async streamNews(ws, resumeFromIndex = 0, category = null, date = null) {
         try {
-            const articles = await this.newsService.getNews();
+            // Get articles - either all or filtered by category
+            let articles;
+            if (category) {
+                articles = await this.newsService.getNewsByCategory(category, date);
+            } else {
+                articles = await this.newsService.getNews(date);
+            }
 
             if (articles.length === 0) {
+                const message = category
+                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
+                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
                 ws.send(JSON.stringify({
                     type: 'error',
-                    message: 'No news articles available for yesterday'
+                    message: message
                 }));
                 return;
             }
@@ -71,12 +107,19 @@ class WebSocketServer {
                 const streamInterval = setInterval(() => {
                     if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
                         const currentArticleIndex = resumeFromIndex + streamIndex;
+                        const article = articlesToStream[streamIndex];
+
                         ws.send(JSON.stringify({
                             type: 'stream',
-                            article: articlesToStream[streamIndex],
+                            article: {
+                                ...article.toObject(),
+                                category: article.category // Include category in response
+                            },
                             index: currentArticleIndex + 1, // 1-based for display
                             total: articles.length,
-                            message: `Article ${currentArticleIndex + 1} of ${articles.length}`
+                            category: article.category, // Add category at top level for easy access
+                            message: `Article ${currentArticleIndex + 1} of ${articles.length} (${article.category})`,
+                            endpoint: 'default'
                         }));
                         streamIndex++;
                     } else {
@@ -101,26 +144,34 @@ class WebSocketServer {
                 const batchSize = Math.min(10, remainingArticles.length);
                 const initialBatch = remainingArticles.slice(0, batchSize);
 
-                // Send initial batch
+                // Send initial batch with category information
                 if (remainingArticles.length <= 10) {
                     // Send all remaining articles at once
                     ws.send(JSON.stringify({
                         type: 'batch',
-                        articles: initialBatch,
+                        articles: initialBatch.map(article => ({
+                            ...article.toObject(),
+                            category: article.category
+                        })),
                         total: articles.length,
                         startIndex: resumeFromIndex,
                         endIndex: resumeFromIndex + initialBatch.length - 1,
-                        message: 'All articles sent'
+                        message: 'All articles sent',
+                        endpoint: 'default'
                     }));
                 } else {
                     // Send first batch immediately
                     ws.send(JSON.stringify({
                         type: 'batch',
-                        articles: initialBatch,
+                        articles: initialBatch.map(article => ({
+                            ...article.toObject(),
+                            category: article.category
+                        })),
                         total: articles.length,
                         startIndex: resumeFromIndex,
                         endIndex: resumeFromIndex + batchSize - 1,
-                        message: `First ${batchSize} articles sent. ${remainingArticles.length - batchSize} more to follow.`
+                        message: `First ${batchSize} articles sent. ${remainingArticles.length - batchSize} more to follow.`,
+                        endpoint: 'default'
                     }));
 
                     // Stream remaining articles one by one at configurable interval
@@ -136,12 +187,19 @@ class WebSocketServer {
                     const streamInterval = setInterval(() => {
                         if (streamIndex < articlesToStream.length && ws.readyState === WebSocket.OPEN) {
                             const currentArticleIndex = resumeFromIndex + batchSize + streamIndex;
+                            const article = articlesToStream[streamIndex];
+
                             ws.send(JSON.stringify({
                                 type: 'stream',
-                                article: articlesToStream[streamIndex],
+                                article: {
+                                    ...article.toObject(),
+                                    category: article.category
+                                },
                                 index: currentArticleIndex + 1, // 1-based for display
                                 total: articles.length,
-                                message: `Article ${currentArticleIndex + 1} of ${articles.length}`
+                                category: article.category,
+                                message: `Article ${currentArticleIndex + 1} of ${articles.length} (${article.category})`,
+                                endpoint: 'default'
                             }));
                             streamIndex++;
                         } else {
@@ -163,7 +221,8 @@ class WebSocketServer {
             console.error('Error streaming news:', error.message);
             ws.send(JSON.stringify({
                 type: 'error',
-                message: 'Error fetching news articles'
+                message: 'Error fetching news articles',
+                endpoint: 'default'
             }));
         }
     }

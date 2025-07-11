@@ -25,12 +25,20 @@ const newsArticleSchema = new mongoose.Schema({
     fetchDate: {
         type: Date,
         required: true
+    },
+    category: {
+        type: String,
+        required: true,
+        enum: ['Politics', 'Business', 'Technology', 'Sports', 'Entertainment', 'Health', 'Science', 'Education', 'Crime', 'International', 'Environment', 'Economy', 'Defense', 'General'],
+        default: 'General'
     }
 }, {
     timestamps: true
 });
 
-// Index for efficient querying by fetch date
+// Index for efficient querying by fetch date and category
 newsArticleSchema.index({ fetchDate: 1 });
+newsArticleSchema.index({ category: 1 });
+newsArticleSchema.index({ fetchDate: 1, category: 1 });
 
 module.exports = mongoose.model('NewsArticle', newsArticleSchema);
