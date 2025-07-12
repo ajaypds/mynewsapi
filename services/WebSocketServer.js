@@ -27,25 +27,21 @@ class WebSocketServer {
         });
     }
 
-    // Default endpoint: / - supports all parameters including resumeFrom
+    // Default endpoint: / - supports category and resumeFrom (date filtering moved to HTTP)
     handleDefaultConnection(ws, query) {
         const resumeFromIndex = parseInt(query.resumeFrom) || 0;
         const category = query.category;
-        const date = query.date;
 
-        console.log(`Default endpoint - Resume from index: ${resumeFromIndex}`);
+        console.log(`WebSocket endpoint - Resume from index: ${resumeFromIndex}`);
         if (category) {
             console.log(`Filtering by category: ${category}`);
-        }
-        if (date) {
-            console.log(`Using date: ${date}`);
         }
 
         // Set up event handlers
         this.setupEventHandlers(ws);
 
-        // Start streaming with all features including resume
-        this.streamNews(ws, resumeFromIndex, category, date);
+        // Start streaming with category and resume support (no date filtering)
+        this.streamNews(ws, resumeFromIndex, category);
     }
 
     // Common event handlers for both endpoints
@@ -63,20 +59,20 @@ class WebSocketServer {
         });
     }
 
-    async streamNews(ws, resumeFromIndex = 0, category = null, date = null) {
+    async streamNews(ws, resumeFromIndex = 0, category = null) {
         try {
-            // Get articles - either all or filtered by category
+            // Get articles - either all or filtered by category (always yesterday's news)
             let articles;
             if (category) {
-                articles = await this.newsService.getNewsByCategory(category, date);
+                articles = await this.newsService.getNewsByCategory(category);
             } else {
-                articles = await this.newsService.getNews(date);
+                articles = await this.newsService.getNews();
             }
 
             if (articles.length === 0) {
                 const message = category
-                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
-                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
+                    ? `No news articles available for category "${category}"`
+                    : `No news articles available for yesterday`;
                 ws.send(JSON.stringify({
                     type: 'error',
                     message: message

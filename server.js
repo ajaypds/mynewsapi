@@ -192,8 +192,8 @@ class Server {
                 message: 'News API Server is running',
                 timestamp: new Date().toISOString(),
                 endpoints: {
-                    websocket: 'ws://localhost:3000',
-                    http_filter: '/filter?category=Technology&date=2025-01-09',
+                    websocket: 'ws://localhost:3000 (supports: category, resumeFrom)',
+                    http_filter: '/filter (supports: category, date)',
                     health: '/api/health',
                     categories: '/api/categories',
                     stats: '/api/stats'
@@ -208,12 +208,18 @@ class Server {
             res.end(JSON.stringify({
                 categories: categoryService.getAvailableCategories(),
                 usage: {
-                    all: 'ws://localhost:3000',
-                    category: 'ws://localhost:3000?category=Technology',
-                    resume: 'ws://localhost:3000?resumeFrom=10',
-                    date: 'ws://localhost:3000?date=2025-07-09',
-                    combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09',
-                    filter_http: '/filter?category=Technology&date=2025-07-09'
+                    websocket: {
+                        all: 'ws://localhost:3000',
+                        category: 'ws://localhost:3000?category=Technology',
+                        resume: 'ws://localhost:3000?resumeFrom=10',
+                        combined: 'ws://localhost:3000?category=Sports&resumeFrom=5'
+                    },
+                    http_filter: {
+                        all: '/filter',
+                        category: '/filter?category=Technology',
+                        date: '/filter?date=2025-07-09',
+                        combined: '/filter?category=Technology&date=2025-07-09'
+                    }
                 }
             }));
         } else if (req.url === '/api/stats') {
