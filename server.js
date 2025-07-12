@@ -192,8 +192,8 @@ class Server {
                 message: 'News API Server is running',
                 timestamp: new Date().toISOString(),
                 endpoints: {
-                    websocket: 'ws://localhost:3000',
-                    http_filter: '/filter?category=Technology&date=2025-01-09',
+                    websocket: 'ws://localhost:3000 (supports: category, resumeFrom)',
+                    http_filter: '/filter?date=YYYY-MM-DD (requires date < yesterday, optional category)',
                     health: '/api/health',
                     categories: '/api/categories',
                     stats: '/api/stats'
@@ -208,12 +208,16 @@ class Server {
             res.end(JSON.stringify({
                 categories: categoryService.getAvailableCategories(),
                 usage: {
-                    all: 'ws://localhost:3000',
-                    category: 'ws://localhost:3000?category=Technology',
-                    resume: 'ws://localhost:3000?resumeFrom=10',
-                    date: 'ws://localhost:3000?date=2025-07-09',
-                    combined: 'ws://localhost:3000?category=Sports&resumeFrom=5&date=2025-07-09',
-                    filter_http: '/filter?category=Technology&date=2025-07-09'
+                    websocket: {
+                        all: 'ws://localhost:3000',
+                        category: 'ws://localhost:3000?category=Technology',
+                        resume: 'ws://localhost:3000?resumeFrom=10',
+                        combined: 'ws://localhost:3000?category=Sports&resumeFrom=5'
+                    },
+                    http_filter: {
+                        date: '/filter?date=2025-07-09 (date must be < yesterday)',
+                        combined: '/filter?category=Technology&date=2025-07-09 (date must be < yesterday)'
+                    }
                 }
             }));
         } else if (req.url === '/api/stats') {
@@ -247,9 +251,7 @@ class Server {
                 message: 'The requested endpoint does not exist'
             }));
         }
-    }
-
-    async handleFilterRequest(req, res) {
+    } async handleFilterRequest(req, res) {
         try {
             const url = require('url');
             const parsedUrl = url.parse(req.url, true);
@@ -259,7 +261,30 @@ class Server {
             const category = query.category;
             const date = query.date;
 
-            console.log(`HTTP Filter request - Category: ${category || 'all'}, Date: ${date || 'yesterday'}`);
+            // REQUIREMENT: date parameter is mandatory
+            if (!date) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify([]));
+                return;
+            }
+
+            // REQUIREMENT: Only return data if date is less than yesterday
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            const yesterdayDateString = yesterday.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+            const requestedDate = new Date(date);
+            const requestedDateString = requestedDate.toISOString().split('T')[0];
+
+            // If requested date is not less than yesterday, return empty array
+            if (requestedDateString >= yesterdayDateString) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify([]));
+                return;
+            }
+
+            console.log(`HTTP Filter request - Category: ${category || 'all'}, Date: ${date}`);
 
             // Initialize NewsService
             const NewsService = require('./services/NewsService');
@@ -273,53 +298,21 @@ class Server {
                 articles = await newsService.getNews(date);
             }
 
-            if (articles.length === 0) {
-                const message = category
-                    ? `No news articles available for category "${category}"${date ? ` on ${date}` : ''}`
-                    : `No news articles available${date ? ` for ${date}` : ' for yesterday'}`;
-
-                res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    success: false,
-                    message: message,
-                    articles: [],
-                    total: 0,
-                    filters: {
-                        category: category || null,
-                        date: date || newsService.getYesterdayDate()
-                    }
-                }));
-                return;
-            }
-
             // Convert articles to plain objects and include category
             const responseArticles = articles.map(article => ({
                 ...article.toObject(),
                 category: article.category
             }));
 
-            // Send successful response
+            // REQUIREMENT: Return only articles array
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                success: true,
-                message: `Found ${articles.length} articles${category ? ` in category "${category}"` : ''}${date ? ` for ${date}` : ''}`,
-                articles: responseArticles,
-                total: articles.length,
-                filters: {
-                    category: category || null,
-                    date: date || newsService.getYesterdayDate()
-                },
-                timestamp: new Date().toISOString()
-            }));
+            res.end(JSON.stringify(responseArticles));
 
         } catch (error) {
+            // REQUIREMENT: On any error, return empty array
             console.error('Error in HTTP filter endpoint:', error.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                success: false,
-                error: 'Internal server error',
-                message: error.message
-            }));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify([]));
         }
     }
 
