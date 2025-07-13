@@ -194,6 +194,7 @@ class Server {
                 endpoints: {
                     websocket: 'ws://localhost:3000 (supports: category, resumeFrom)',
                     http_filter: '/filter?date=YYYY-MM-DD (requires date < yesterday, optional category)',
+                    summarize: 'POST /summarize (accepts array of articles, returns summary)',
                     health: '/api/health',
                     categories: '/api/categories',
                     stats: '/api/stats'
@@ -244,6 +245,9 @@ class Server {
         } else if (req.url.startsWith('/filter')) {
             // HTTP endpoint for filtering articles by category and date (no resumeFrom)
             this.handleFilterRequest(req, res);
+        } else if (req.url === '/summarize' && req.method === 'POST') {
+            // POST endpoint for summarizing an array of news articles
+            this.handleSummarizeRequest(req, res);
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -313,6 +317,179 @@ class Server {
             console.error('Error in HTTP filter endpoint:', error.message);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify([]));
+        }
+    }
+
+    async handleSummarizeRequest(req, res) {
+        try {
+            // Parse JSON body from POST request
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+
+            req.on('end', async () => {
+                try {
+                    const requestData = JSON.parse(body);
+
+                    // Validate input
+                    if (!requestData.articles || !Array.isArray(requestData.articles)) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            error: 'Invalid input',
+                            message: 'Request must contain an "articles" array'
+                        }));
+                        return;
+                    }
+
+                    const articles = requestData.articles;
+
+                    if (articles.length === 0) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            title: 'No Articles to Summarize',
+                            summary: 'No articles were provided for summarization.',
+                            articleCount: 0,
+                            categories: [],
+                            timestamp: new Date().toISOString()
+                        }));
+                        return;
+                    }
+
+                    // Generate summary
+                    const summary = this.generateSummary(articles);
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(summary));
+
+                } catch (parseError) {
+                    console.error('Error parsing summarize request:', parseError.message);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: 'Invalid JSON',
+                        message: 'Request body must be valid JSON'
+                    }));
+                }
+            });
+
+        } catch (error) {
+            console.error('Error in summarize endpoint:', error.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: 'Internal server error',
+                message: 'Failed to process summarization request'
+            }));
+        }
+    }
+
+    generateSummary(articles) {
+        try {
+            const articleCount = articles.length;
+
+            // Extract categories and count them
+            const categoryCount = {};
+            const sources = new Set();
+            const dateRange = { earliest: null, latest: null };
+
+            articles.forEach(article => {
+                // Count categories
+                const category = article.category || 'General';
+                categoryCount[category] = (categoryCount[category] || 0) + 1;
+
+                // Collect sources
+                if (article.source && article.source.name) {
+                    sources.add(article.source.name);
+                }
+
+                // Track date range
+                if (article.publishedAt) {
+                    const publishedDate = new Date(article.publishedAt);
+                    if (!dateRange.earliest || publishedDate < dateRange.earliest) {
+                        dateRange.earliest = publishedDate;
+                    }
+                    if (!dateRange.latest || publishedDate > dateRange.latest) {
+                        dateRange.latest = publishedDate;
+                    }
+                }
+            });
+
+            // Get top categories
+            const sortedCategories = Object.entries(categoryCount)
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, count]) => ({ category, count }));
+
+            const topCategory = sortedCategories[0];
+            const sourceCount = sources.size;
+
+            // Generate dynamic title based on content
+            let title = 'News Summary';
+            if (topCategory && articleCount > 1) {
+                title = `${topCategory.category} News Summary (${articleCount} Articles)`;
+            } else if (articleCount === 1) {
+                title = `Single Article Summary - ${articles[0].category || 'General'}`;
+            }
+
+            // Generate summary text
+            let summaryText = `This collection contains ${articleCount} news article${articleCount > 1 ? 's' : ''} `;
+
+            if (sourceCount > 0) {
+                summaryText += `from ${sourceCount} different source${sourceCount > 1 ? 's' : ''} `;
+            }
+
+            if (sortedCategories.length > 1) {
+                summaryText += `covering ${sortedCategories.length} categories. `;
+                summaryText += `The primary focus is on ${topCategory.category} (${topCategory.count} article${topCategory.count > 1 ? 's' : ''}), `;
+
+                if (sortedCategories.length > 2) {
+                    summaryText += `followed by ${sortedCategories[1].category} (${sortedCategories[1].count}) and ${sortedCategories.length - 2} other categor${sortedCategories.length - 2 > 1 ? 'ies' : 'y'}. `;
+                } else {
+                    summaryText += `and ${sortedCategories[1].category} (${sortedCategories[1].count}). `;
+                }
+            } else {
+                summaryText += `all in the ${topCategory.category} category. `;
+            }
+
+            // Add date range if available
+            if (dateRange.earliest && dateRange.latest) {
+                const earliestDate = dateRange.earliest.toISOString().split('T')[0];
+                const latestDate = dateRange.latest.toISOString().split('T')[0];
+
+                if (earliestDate === latestDate) {
+                    summaryText += `All articles are from ${earliestDate}.`;
+                } else {
+                    summaryText += `Articles span from ${earliestDate} to ${latestDate}.`;
+                }
+            }
+
+            // Get sample headlines (top 3)
+            const sampleHeadlines = articles
+                .slice(0, 3)
+                .map(article => article.title)
+                .filter(title => title && title.length > 0);
+
+            return {
+                title: title,
+                summary: summaryText,
+                articleCount: articleCount,
+                categories: sortedCategories,
+                sources: Array.from(sources).slice(0, 10), // Limit to 10 sources
+                dateRange: {
+                    earliest: dateRange.earliest ? dateRange.earliest.toISOString().split('T')[0] : null,
+                    latest: dateRange.latest ? dateRange.latest.toISOString().split('T')[0] : null
+                },
+                sampleHeadlines: sampleHeadlines,
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('Error generating summary:', error.message);
+            return {
+                title: 'Summary Generation Error',
+                summary: 'An error occurred while generating the summary.',
+                articleCount: articles.length,
+                categories: [],
+                timestamp: new Date().toISOString()
+            };
         }
     }
 
