@@ -348,10 +348,7 @@ class Server {
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({
                             title: 'No Articles to Summarize',
-                            summary: 'No articles were provided for summarization.',
-                            articleCount: 0,
-                            categories: [],
-                            timestamp: new Date().toISOString()
+                            summary: 'No articles were provided for summarization.'
                         }));
                         return;
                     }
@@ -469,26 +466,14 @@ class Server {
 
             return {
                 title: title,
-                summary: summaryText,
-                articleCount: articleCount,
-                categories: sortedCategories,
-                sources: Array.from(sources).slice(0, 10), // Limit to 10 sources
-                dateRange: {
-                    earliest: dateRange.earliest ? dateRange.earliest.toISOString().split('T')[0] : null,
-                    latest: dateRange.latest ? dateRange.latest.toISOString().split('T')[0] : null
-                },
-                sampleHeadlines: sampleHeadlines,
-                timestamp: new Date().toISOString()
+                summary: summaryText
             };
 
         } catch (error) {
             console.error('Error generating summary:', error.message);
             return {
                 title: 'Summary Generation Error',
-                summary: 'An error occurred while generating the summary.',
-                articleCount: articles.length,
-                categories: [],
-                timestamp: new Date().toISOString()
+                summary: 'An error occurred while generating the summary.'
             };
         }
     }
